@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import YTDlpWrap from 'yt-dlp-wrap';
 import path from 'path';
 import fs from 'fs';
 import { promisify } from 'util';
 import { platform } from 'os';
+import { exec } from 'child_process';
 
 const readFile = promisify(fs.readFile);
 const unlink = promisify(fs.unlink);
+const execPromise = promisify(exec);
 
 // Function to get the correct binary path based on the platform
 const getBinaryPath = () => {
@@ -18,11 +19,8 @@ const getBinaryPath = () => {
   }
 
   // In production (Vercel)
-  const binaryName = platform() === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
-  return path.join(process.cwd(), 'bin', binaryName);
+  return path.join(process.cwd(), 'bin', 'yt-dlp');
 };
-
-const ytDlp = new YTDlpWrap(getBinaryPath());
 
 export async function POST(request: Request) {
   try {
@@ -36,27 +34,21 @@ export async function POST(request: Request) {
     }
 
     try {
+      const ytDlpPath = getBinaryPath();
+      
       // Get video info first
-      const rawInfo = await ytDlp.execPromise([
-        url,
-        '--dump-json',
-        '--no-check-certificates',
-        '--force-ipv4',
-        '--no-warnings'
-      ]);
+      const { stdout: rawInfo } = await execPromise(
+        `${ytDlpPath} "${url}" --dump-json --no-check-certificates --force-ipv4 --no-warnings`
+      );
 
       const videoInfo = JSON.parse(rawInfo);
       const title = videoInfo.title.replace(/[^a-zA-Z0-9]/g, '_');
       const outputPath = path.join('/tmp', `${title}.mp3`);
 
       // Download the file
-      await ytDlp.execPromise([
-        url,
-        '-f', 'bestaudio',
-        '--extract-audio',
-        '--audio-format', 'mp3',
-        '-o', outputPath
-      ]);
+      await execPromise(
+        `${ytDlpPath} "${url}" -f bestaudio --extract-audio --audio-format mp3 -o "${outputPath}"`
+      );
 
       // Read the file
       const fileBuffer = await readFile(outputPath);
