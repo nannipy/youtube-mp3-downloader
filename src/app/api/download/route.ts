@@ -3,10 +3,26 @@ import YTDlpWrap from 'yt-dlp-wrap';
 import path from 'path';
 import fs from 'fs';
 import { promisify } from 'util';
+import { platform } from 'os';
 
-const ytDlp = new YTDlpWrap();
 const readFile = promisify(fs.readFile);
 const unlink = promisify(fs.unlink);
+
+// Function to get the correct binary path based on the platform
+const getBinaryPath = () => {
+  const isDev = process.env.NODE_ENV === 'development';
+  
+  if (isDev) {
+    // In development, use the system's yt-dlp
+    return 'yt-dlp';
+  }
+
+  // In production (Vercel)
+  const binaryName = platform() === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
+  return path.join(process.cwd(), 'bin', binaryName);
+};
+
+const ytDlp = new YTDlpWrap(getBinaryPath());
 
 export async function POST(request: Request) {
   try {
