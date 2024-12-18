@@ -1,25 +1,5 @@
 import { NextResponse } from "next/server";
-import path from 'path';
-import fs from 'fs';
-import { promisify } from 'util';
-import { exec } from 'child_process';
-
-const readFile = promisify(fs.readFile);
-const unlink = promisify(fs.unlink);
-const execPromise = promisify(exec);
-
-// Function to get the correct binary path based on the platform
-const getBinaryPath = () => {
-  const isDev = process.env.NODE_ENV === 'development';
-  
-  if (isDev) {
-    // In development, use the system's yt-dlp
-    return 'yt-dlp';
-  }
-
-  // In production (Vercel)
-  return path.join(process.cwd(), 'bin', 'yt-dlp');
-};
+import ytdl from 'ytdl-core';
 
 export async function POST(request: Request) {
   try {
@@ -33,35 +13,35 @@ export async function POST(request: Request) {
     }
 
     try {
-      const ytDlpPath = getBinaryPath();
+      // Get video info
+      const info = await ytdl.getInfo(url);
       
-      // Get video info first
-      const { stdout: rawInfo } = await execPromise(
-        `${ytDlpPath} "${url}" --dump-json --no-check-certificates --force-ipv4 --no-warnings`
-      );
+      // Get the best audio format
+      const format = ytdl.chooseFormat(info.formats, {
+        quality: 'highestaudio',
+        filter: 'audioonly'
+      });
 
-      const videoInfo = JSON.parse(rawInfo);
-      const title = videoInfo.title.replace(/[^a-zA-Z0-9]/g, '_');
-      const outputPath = path.join('/tmp', `${title}.mp3`);
+      if (!format) {
+        throw new Error("No suitable audio format found");
+      }
 
-      // Download the file
-      await execPromise(
-        `${ytDlpPath} "${url}" -f bestaudio --extract-audio --audio-format mp3 -o "${outputPath}"`
-      );
-
-      // Read the file
-      const fileBuffer = await readFile(outputPath);
-
-      // Delete the temporary file
-      await unlink(outputPath);
+      // Get sanitized filename
+      const title = info.videoDetails.title.replace(/[^a-zA-Z0-9]/g, '_');
 
       // Create response headers
       const headers = new Headers();
       headers.set('Content-Type', 'audio/mpeg');
       headers.set('Content-Disposition', `attachment; filename="${encodeURIComponent(title)}.mp3"`);
-      headers.set('Content-Length', fileBuffer.length.toString());
 
-      return new Response(fileBuffer, {
+      // Stream the audio
+      const stream = ytdl(url, {
+        format: format,
+        filter: 'audioonly',
+        quality: 'highestaudio'
+      });
+
+      return new Response(stream as any, {
         headers,
       });
 
