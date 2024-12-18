@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import path from 'path';
 import fs from 'fs';
 import { promisify } from 'util';
-import { platform } from 'os';
 import { exec } from 'child_process';
 
 const readFile = promisify(fs.readFile);
