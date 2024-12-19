@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { stream, video_info } from 'play-dl';
-import { Readable } from 'stream';
 
 export async function POST(request: Request): Promise<Response | NextResponse> {
   try {
