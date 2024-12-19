@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import ytdl from 'ytdl-core';
+import { stream, video_info } from 'play-dl';
 
 export async function POST(request: Request) {
   try {
@@ -14,34 +14,23 @@ export async function POST(request: Request) {
 
     try {
       // Get video info
-      const info = await ytdl.getInfo(url);
+      const info = await video_info(url);
       
-      // Get the best audio format
-      const format = ytdl.chooseFormat(info.formats, {
-        quality: 'highestaudio',
-        filter: 'audioonly'
-      });
-
-      if (!format) {
-        throw new Error("No suitable audio format found");
-      }
-
       // Get sanitized filename
-      const title = info.videoDetails.title.replace(/[^a-zA-Z0-9]/g, '_');
+      const title = info.video_details?.title?.replace(/[^a-zA-Z0-9]/g, '_') ?? 'unknown';
 
       // Create response headers
       const headers = new Headers();
       headers.set('Content-Type', 'audio/mpeg');
       headers.set('Content-Disposition', `attachment; filename="${encodeURIComponent(title)}.mp3"`);
 
-      // Stream the audio
-      const stream = ytdl(url, {
-        format: format,
-        filter: 'audioonly',
-        quality: 'highestaudio'
+      // Get the audio stream
+      const audioStream = await stream(url, {
+        quality: 140, // 140 is m4a audio only
+        discordPlayerCompatibility: false
       });
 
-      return new Response(stream as any, {
+      return new Response(audioStream.stream as any, {
         headers,
       });
 
