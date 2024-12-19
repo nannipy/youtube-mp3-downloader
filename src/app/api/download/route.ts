@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { stream, video_info } from 'play-dl';
+import { Readable } from 'stream';
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response | NextResponse> {
   try {
-    const { url } = await request.json();
+    const { url }: { url: string } = await request.json();
 
     if (!url) {
       return NextResponse.json(
@@ -16,8 +17,12 @@ export async function POST(request: Request) {
       // Get video info
       const info = await video_info(url);
       
+      if (!info.video_details?.title) {
+        throw new Error("Could not get video title");
+      }
+
       // Get sanitized filename
-      const title = info.video_details?.title?.replace(/[^a-zA-Z0-9]/g, '_') ?? 'unknown';
+      const title = info.video_details.title.replace(/[^a-zA-Z0-9]/g, '_');
 
       // Create response headers
       const headers = new Headers();
@@ -30,11 +35,15 @@ export async function POST(request: Request) {
         discordPlayerCompatibility: false
       });
 
-      return new Response(audioStream.stream as any, {
+      if (!audioStream?.stream) {
+        throw new Error("Could not get audio stream");
+      }
+
+      return new Response(audioStream.stream as unknown as ReadableStream, {
         headers,
       });
 
-    } catch (infoError) {
+    } catch (infoError: unknown) {
       console.error("Error getting video info:", infoError);
       return NextResponse.json(
         { error: "Could not get video information: " + (infoError instanceof Error ? infoError.message : "Unknown error") },
@@ -42,7 +51,7 @@ export async function POST(request: Request) {
       );
     }
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Download error:", error);
     return NextResponse.json(
       { error: "Failed to process video: " + (error instanceof Error ? error.message : "Unknown error") },
